@@ -7,6 +7,7 @@ from sudokuGetter import Refresher
 from settingFile import SaveSettings
 
 
+# SUDOKU GAME OBJECT
 class Game:
 
     # ALL GAME DEFAULTS/CONSTANTS
@@ -22,23 +23,27 @@ class Game:
     error_color = "#ff9a90"
     max_notes = 5
 
-    # initialize the game...
+    # CREATE / INITIALIZE GAME OBJECT
     def __init__(self, master):
+
+        # SET DEFAULT VALUES - GAMEPLAY STATUS
         self.master = master
         self.my_settings = SaveSettings()
         self.highlight_color = self.my_settings.get_highlight()
         self.config_menus()
-        #self.setup_results_window()
-
         self.running = True
         self.started = False
         self.setting = False
         self.just_started = True
         self.reg = master.register(self.correct_entry)
+
+        # REGISTER ARROW KEYS TO ARROW_PRESSED FUNCTION
         self.master.bind('<Left>', self.arrow_pressed)
         self.master.bind('<Right>', self.arrow_pressed)
         self.master.bind('<Up>', self.arrow_pressed)
         self.master.bind('<Down>', self.arrow_pressed)
+
+        # SET MORE DEFUALT VALUES - NOTES AND TIME
         self.taking_notes = False
         self.errors_on = True
         self.recent_pause = time.time()
@@ -49,7 +54,7 @@ class Game:
         self.multiple_asks = False
         self.pop_window = False
 
-        #set up title frame
+        # CREATE TITLE FRAME
         self.title_frame = Frame(master, bg=Game.background_color)
         self.title_frame.pack(fill=X)
         self.title_label = Label(self.title_frame,
@@ -58,12 +63,13 @@ class Game:
         self.title_label.config(font=("Chalkduster", 34))
         self.title_label.pack()
 
-        #set up button frame
+        # CREATE BUTTON FRAME
         self.button_frame = Frame(master, bg="#F5F5F5")
         self.button_frame.pack(fill=X)
         self.difficulty = StringVar(self.button_frame)
         self.difficulty.set(self.my_settings.get_difficulty())
 
+        # CREATE BUTTON LIST - LINK DIFFICULTY WITH MENU / FUNCTION
         self.buttons = [
             Button(self.button_frame, text="NEW GAME", command=self.new_game,
                    width=30, fg="blue", activeforeground="blue"),
@@ -78,20 +84,20 @@ class Game:
         self.buttons[1].config(fg="green", activeforeground="green")
         self.difficulty.trace('w', self.adjust_difficulty)
 
+        # ADJUST BUTTON FRAME DISPLAY / SPACING
         self.button_spacing = 10
         for i in range(4):
             self.button_frame.columnconfigure(i, weight=1)
             self.buttons[i].grid(row=0, column=i,
                                  ipadx=self.button_spacing, ipady=self.button_spacing)
 
-        #set up playing/core frame
+        # CREATE CORE FRAME / PLAYABLE SUDOKU GRID
         self.core_frame = Frame(master, bg="black")
         self.core_frame.pack(expand=YES, fill=BOTH)
 
-        #set up note buttons
+        # CREATE NOTE BUTTONS - LINK EACH TO NOTE FUNCTION
         self.note_frame = Frame(master, bg="cyan")
         self.note_frame.pack(fill=X)
-        #self.note_frame.rowconfigure(0, weight=1)
         self.note_buttons = [
             Button(self.note_frame, text=1, command=lambda: self.set_note(1),
                    fg="purple", font=("Chalkduster", 16)),
@@ -117,72 +123,84 @@ class Game:
             self.note_buttons[i].grid(row=0, column=i,
                             ipadx=40, ipady=5)
 
-        #load in previous settings
+        # LOAD PREVIOUSLY SAVED SETTINGS FROM MY_SETTINGS OBJECT
         self.difficulty.set(self.my_settings.get_difficulty())
         self.og_diff = str(self.difficulty.get())
         if not self.my_settings.get_error_recog():
             self.toggle_errors()
-
         self.save_settings()
 
+        # ACQUIRE ORIGINAL PROBLEM GRID
         self.original_grid = self.get_new_grid(self.difficulty.get())
 
-        #set up working grid
+        # SET UP DISPLAY GRID
         self.grid = []
         for i in range(9):
             self.grid.append([])
             for j in range(9):
                 self.grid[i].append(self.original_grid[i][j])
 
-        # set up user grid
+        # SET UP USER-WORKABLE GRID
         self.user_grid = []
         for i in range(9):
             self.user_grid.append([])
             for j in range(9):
                 self.user_grid[i].append(self.original_grid[i][j])
 
-        #set up noting, done later?
+        # CREATE NOTE-TAKING GRID TO TRACK NOTES
         self.noting = []
         for i in range(9):
             self.noting.append([])
             for j in range(9):
                 self.noting[i].append(False)
 
-        #self.grid = self.original_grid
+        # START CLOCK - CREATE BRAIN FOR SOLVE LOGIC - DISPLAY GRID
         self.start_time = time.time()
         self.brain = Brain(self.original_grid)
         self.display()
 
-        #FIX BY SETTING MIN LABEL SIZE
-        #setup a timer... change to start at 0
+        # CREATE TIMER / MESSAGE LABEL FRAME / PAUSE BUTTON
         self.timer_frame = Frame(master, bg=Game.background_color)
         self.timer_frame.pack(fill=X)
+
+        # CREATE PAUSE BUTTON
         self.pause_img = PhotoImage(file='pause-button.png')
         self.pause_button = Button(self.timer_frame, image=self.pause_img,
-                                   command=self.toggle_pause_button, bg=Game.my_blue,
-                                   pady=4, padx=4)
+                                   command=self.toggle_pause_button,
+                                   bg=Game.my_blue, pady=4, padx=4)
         self.pause_button.pack(side=LEFT, padx=8)
+
+        # CREATE MESSAGE LABEL ON BOTTOM OF APP
         self.message_label = Label(self.timer_frame, text="",
                                    bg=Game.background_color, pady=10)
         self.message_label.config(font=("Chalkduster", 18))
         self.message_label.pack(side=LEFT, padx=5)
+
+        # CREATE TIMER LABEL
         self.timer_label = Label(self.timer_frame, text="",
                                  bg=Game.background_color, pady=15)
         self.timer_label.config(font=("Tahoma", 18))
         self.timer_label.pack(side=RIGHT,padx=5)
+
+        # CLOCK MANAGEMENT FUNCTION
         def clock():
+
+            # DISALLOW TIMER IF GAME CURRENTLY PAUSED
             if self.running and not self.is_paused:
-                #prevents constant triggering by spacing out
                 self.multiple_asks = False
 
-                #bank paused time and then clear last pause timer
+                # BANK PAUSED TIME IN LATEST PAUSE
+                # ADD RECENT PAUSE TIME TO TOTAL PAUSED TIME
                 if self.step_pause > 0:
                     self.total_pause += self.step_pause
                     self.step_pause = 0
+
+                # CALCULATE GAMEPLAY TIME - DISREGARD PAUSED TIME
                 total_time = time.time() - self.start_time - self.total_pause
                 minute = int(total_time // 60)
                 second = int(total_time - (minute * 60))
 
+                # CREATE TEXT REPRESENTATION OF GAMEPLAY TIME
                 label = ""
                 if minute < 10:
                     label = "0" + str(minute) + ":" + label
@@ -193,10 +211,13 @@ class Game:
                 else:
                     label = label + str(second)
 
-                #label = "TIME: " + label
-
+                # ADJUST OUTPUT DISPLAY LABEL
                 self.timer_label.config(text=label)
+
+            # RESTART CLOCK METHOD EVERY ONE SECOND
             self.timer_label.after(1000, clock)
+
+        # INITIAL CALL TO CLOCK MANAGEMENT FUNCTION
         clock()
 
     # HANDLE ARROW KEYBOARD PRESS EVENTS
@@ -314,7 +335,7 @@ class Game:
             content = ""
         self.color_note_buttons(content)
 
-    # SAVE ASSOCITATED SETTINGS FILE WITH NEW PREFERENCES
+    # SAVE ASSOCIATED SETTINGS FILE WITH NEW PREFERENCES
     def save_settings(self):
         self.my_settings.update_highlight(self.highlight_color)
         self.my_settings.update_difficulty(self.difficulty.get())
@@ -821,6 +842,9 @@ class Game:
         # IF NOT IN BETWEEN GAMES ENABLE WIDGETS
         if self.running:
             self.enable_all_widgets()
+        else:
+            self.buttons[0].config(state=NORMAL)
+            self.buttons[1].config(state=NORMAL)
 
         # COLORIZE GRID IF POSSIBLE
         try:
@@ -1097,9 +1121,12 @@ class Game:
         except AttributeError:
             self.message_label.config(text="Select a cell...")
 
-    # LEFT OF HERE...
+    # CREATE NEW GAME DISPLAY
+    # MULTI-LINE CONDITIONALS
     def display(self):
-        #   SET UP A FRAME FOR EACH QUADRANT
+
+        # SET UP A FRAME FOR EACH QUADRANT
+        # SET UP LIST OF SECTION FOR LATER ACCESS
         self.sections = []
         sm_spacing, lg_spacing = 0.5, 2
         for i in range(3):
@@ -1115,57 +1142,73 @@ class Game:
                 section_frame.rowconfigure((0, 1, 2), weight=1, minsize=55)
                 self.sections[i].append(section_frame)
 
+        # CREATE GRID OF ALL LABELS AND ENTRIES
         self.disp_grid = []
         for i in range(9):
             self.disp_grid.append([])
 
-            #look up text widget
             for j in range(9):
-                #check for each box
-                #box started empty
+                # STORE VALUES IN GRID (ORIGINAL, CURRENT)
                 og_val = self.original_grid[i][j]
                 grid_val = self.grid[i][j]
                 user_val = self.user_grid[i][j]
 
+                # ORIGINAL GRID IS EMPTY - SET COLOR
                 if og_val == 0:
+
+                    # HANDLE SETTING CONDITION
                     if self.setting:
                         var_color = "black"
-                    elif ((user_val == 0 or len(str(user_val)) > 1) and grid_val != 0) or self.noting[i][j]:
+
+                    # HANDLE AFTER SOLVED - CHOOSE CORRECT COLOR
+                    elif ((user_val == 0 or len(str(user_val)) > 1)
+                          and grid_val != 0) or self.noting[i][j]:
                         var_color = "blue"
                     elif user_val == grid_val:
                         var_color = "green"
                     elif user_val != 0:
                         var_color = "red"
+                    else:
+                        var_color = 'black'
                 else:
                     var_color = "black"
 
+                # GRID IS EMPTY - CREATE ENTRY BOX
                 if self.grid[i][j] == 0:
                     new_icon = Entry(self.sections[i//3][j//3], width=1,
                                      insertontime=0,
                                      justify=CENTER, fg=var_color, bg="white",
-                                     disabledbackground=Game.light_green, validate="key",
+                                     disabledbackground=Game.light_green,
+                                     validate="key",
                                      validatecommand=(self.reg, '%S', '%d'))
+
+                    # BIND CLICK TO SELECTION FUNCTION
                     new_icon.bind("<1>", self.on_click)
                     if self.setting:
                         new_icon.config(font=("Tahoma bold", 28))
                     else:
                         new_icon.config(font=("Chalkduster", 28))
+
+                # GRID IS NOT EMPTY - CREATE LABEL BOX
                 else:
                     new_icon = Label(self.sections[i//3][j//3],
                                      text=str(self.grid[i][j]),
                                      fg=var_color, bg="white",
                                      highlightthickness=2)
+
+                    # FONT SELECTION COMPARISION: USER V. GIVEN NUMBERS
                     if self.original_grid[i][j] == 0:
                         new_icon.config(font=("Chalkduster", 28))
                     else:
                         new_icon.config(font=("Tahoma bold", 28))
 
-                #CHANGES MADE HERE
+                # ADJUST SPACING AND SAVE GRID OBJECTS
                 new_icon.grid(row=i%3, column=j%3,
                               padx=sm_spacing, pady=sm_spacing,
                               sticky=NSEW)
                 self.disp_grid[i].append(new_icon)
 
+    # CHANGE DIFFICULTY LABEL COLOR
     def adjust_difficulty(self, *args):
         if self.difficulty.get() == "EASY":
             self.buttons[1].config(fg="green",
@@ -1183,57 +1226,71 @@ class Game:
             self.buttons[1].config(fg="purple",
                                    activeforeground="purple")
 
-        '''self.buttons[1].config(text=self.difficulty,
-                               fg=diff_color,
-                               activeforeground=diff_color)'''
-
+    # AUTO-SOLVE SUDOKU FROM SCRATCH
     def solve_display(self):
+
+        # RESET BOARD BACK TO ORIGINAL
         self.brain.update_grid(self.original_grid)
 
-        #auto changes the grid...
+        # SOLVE THE GRID WITH BACKTRACKING - SAVE TO GAME GRID
         self.brain.solve()
         self.grid = self.brain.grid
 
+        # GET ALL USER ENTRIES AND UPDATE USER GRID
         for i in range(9):
             for j in range(9):
                 if self.original_grid[i][j] == 0:
                     val = self.disp_grid[i][j].get()
                     self.user_grid[i][j] = 0 if val == "" else int(val)
 
+        # UPDATE DISPLAY - GAMEPLAY IS NOW PAUSED
         self.message_label.config(text="Sudoku Auto-Solved!")
         self.display()
         self.running = False
         self.set_grid_color("white")
 
+    # EVALUATE USER GRID FOR CORRECTNESS
     def submit(self):
 
+        # ACQUIRE ALL USER ENTRY VALUES
         for i in range(9):
             for j in range(9):
                 if self.original_grid[i][j] == 0:
                     val = self.disp_grid[i][j].get()
                     self.user_grid[i][j] = 0 if val == "" else int(val)
 
+        # UPDATE BRAIN GRID WITH USER GRID - GRID IS CORRECT
         self.brain.update_grid(self.user_grid)
         if self.brain.eval():
+
+            # UPDATE DISPLAY / FUNCTIONALITY - PAUSE GAME
             self.message_label.config(text="Perfect!")
             self.running = False
             for button in self.note_buttons:
                 button.config(state=DISABLED)
-            self.set_grid_color(Game.light_green)
 
+            self.set_grid_color(Game.light_green)
             self.buttons[2].config(state=DISABLED)
             self.buttons[3].config(state=DISABLED)
             self.color_note_buttons("")
 
-            new_r = self.my_settings.check_record(self.og_diff, int(time.time() - self.start_time - self.total_pause))
+            # EVALUATE TIME - BRING UP NAME SUBMISSION IF HIGH SCORE
+            temp_time = int(time.time() - self.start_time - self.total_pause)
+            new_r = self.my_settings.check_record(self.og_diff, temp_time)
             if new_r:
                 self.show_results_window()
 
+        # GRID IS NOT CORRECT - SEND MESSAGE
         else:
             self.message_label.config(text="Sorry, try again!")
+
+        # RETURN BRAIN GRID TO ORIGINAL PROBLEM GRID
         self.brain.update_grid(self.original_grid)
 
+    # START OVER A NEW GAME
     def new_game(self):
+
+        # RESET ALL RELEVANT INITIAL VALUES
         self.og_diff = str(self.difficulty.get())
         self.total_pause = 0
         self.step_pause = 0
@@ -1245,13 +1302,13 @@ class Game:
         for button in self.note_buttons:
             button.config(state=NORMAL)
 
+        # NEW GAME IS A CUSTOM USER-GRID
         if self.difficulty.get() == "CUSTOM":
+
+            # ADJUST HEADER BUTTON - LINK TO BEGIN_CUSTOM FUNCTION
             self.buttons[0].config(text="BEGIN", command=self.begin_custom)
 
-            '''self.buttons[0] = Button(self.button_frame, text="BEGIN",
-                                     command=self.begin_custom, width=30)
-            self.buttons[0].grid(row=0, column=0,
-                                 ipadx=self.button_spacing, ipady=self.button_spacing)'''
+            # INITIALIZE GRID COMPLETELY EMPTY - CLEAR CLOCK
             for i in range(9):
                 for j in range(9):
                     self.original_grid[i][j] = 0
@@ -1259,16 +1316,22 @@ class Game:
                     self.user_grid[i][j] = 0
             self.timer_label.config(text="00:00")
 
+            # DISABLE NON-ESSENTIAL BUTTONS
             for i in [1, 2, 3]:
                 self.buttons[i].config(state=DISABLED)
             for i in range(9):
                 self.note_buttons[i].config(state=DISABLED)
             self.pause_button.config(state=DISABLED)
 
+            # UPDATE STATE OF GAMEPLAY BOOLEANS
             self.running = False
             self.setting = True
             self.started = True
+
+        # NEW GAME HAS A STANDARD DIFFICULTY
         else:
+
+            # UPDATE DISPLAY - INITIAL BOOLEANS - ACQUIRE NEW GRID
             self.running = True
             self.message_label.config(text="")
             self.buttons[2].config(state=NORMAL)
@@ -1277,14 +1340,14 @@ class Game:
             self.grid = self.original_grid
             self.pause_button.config(state=NORMAL)
 
-            # set up working grid
+            # CREATE NEW GRID
             self.user_grid = []
             for i in range(9):
                 self.user_grid.append([])
                 for j in range(9):
                     self.user_grid[i].append(self.original_grid[i][j])
 
-            #setting note grid
+            # RESET NOTE-TAKING GRID - JUST STARTED NEW GAME
             self.noting = []
             for i in range(9):
                 self.noting.append([])
@@ -1295,31 +1358,34 @@ class Game:
             self.color_note_buttons("")
             self.just_started = True
 
+        # DISPLAY GRID AND SAVE SETTINGS
         self.display()
         self.save_settings()
 
+    # MAKE CUSTOM USER INPUT GRID INTO ORIGINAL GRID - START NEW
     def begin_custom(self):
+
+        # UPDATE CONDITION OF GAMEPLAY
         self.running = True
         self.setting = False
         self.just_started = True
 
-        #re-enable buttons
+        # RE-ENABLE BUTTONS
         for i in [1, 2, 3]:
             self.buttons[i].config(state=NORMAL)
         for i in range(9):
             self.note_buttons[i].config(state=NORMAL)
         self.pause_button.config(state=NORMAL)
 
+        # RESTART CLOCK - AND RESET CUSTOM_BUTTON TO NEW_GAME_BUTTON
         self.start_time = time.time()
         self.buttons[0].config(text="NEW GAME", command=self.new_game)
-        self.difficulty.set("EASY")
 
-        '''self.buttons[0] = Button(self.button_frame, text="NEW GAME",
-                                 command=self.new_game, width=30)
-        self.buttons[0].grid(row=0, column=0,
-                             ipadx=self.button_spacing, ipady=self.button_spacing)'''
+        # RESET DIFFICULTY TO EASY MODE FOR DEFAULT
+        self.difficulty.set("EASY")
         self.adjust_difficulty()
 
+        # FILL IN GRIDS WITH APPROPRIATE ZEROS FOR BLANKS
         for i in range(9):
             for j in range(9):
                 val = self.disp_grid[i][j].get()
@@ -1331,10 +1397,14 @@ class Game:
                 self.grid[i][j] = val
                 self.user_grid[i][j] = val
 
+        # RESET NOTE_BUTTON COLORS TO DEFAULT - UPDATE DISPLAY
         self.color_note_buttons("")
         self.display()
 
+    # GET A NEW GRID USING REFRESHER OBJECT FUNCTIONS
     def get_new_grid(self, difficulty):
+
+        # SET POINTER TO SEARCH ASSIGNED DIFFICULTY SECTION OF TEXT
         grids = [[], [], [], []]
         pos = 0
         if difficulty == "EASY":
@@ -1346,9 +1416,12 @@ class Game:
         elif difficulty == "EXPERT":
             pos = 3
 
+        # ACQUIRE ALL LINES OF STORED SUDOKU
+        # EACH LINE REPRESENTS ONE STORED SUDOKU
         with open('Sudoku File', 'r') as csv_file:
             csv_reader = csv.reader(csv_file)
 
+            # SEPERATE BY DIFFICULTY - 50 EACH
             for i, line in enumerate(csv_reader):
                 if i < 50:
                     grids[0].append(line[0])
@@ -1359,108 +1432,151 @@ class Game:
                 elif i < 200:
                     grids[3].append(line[0])
 
+        # GET A NEW SUDOKU LINE
         line_grid = grids[pos][random.randint(0, 49)]
+
+        # STORE TO 9 X 9 GRID
         new_grid = []
         for i, char in enumerate(line_grid):
+
+            # EVERY NINE CHARACTERS APPEND NEW EMPTY ROW OF DATA
             if i % 9 == 0:
                 new_grid.append([])
+
+            # CONVERT VALUE TO 0 OR 1 - 9 INT
             if char == '.':
                 num = 0
             else:
                 num = int(char)
+
+            # APPEND DATA TO CURRENT ROW
             new_grid[i//9].append(num)
 
+        # RESTART CLOCK - RETURN NEW 9 X 9 GRID
         self.start_time = time.time()
         return new_grid
 
+    # HANDLES USER CHARACTER ENTRY AS VALID OR INVALID
     def correct_entry(self, x, type):
-        focused_widget = self.master.focus_get()
 
-        '''
-        #SUPPOSEDLY THERE FOR BLANK INPUTS
-        if x == "":
-            return True'''
+        # ACQUIRE SELECTED OBJECT
+        focus_w = self.master.focus_get()
+
+        # INPUT IS NUMERIC
         if x.isdigit():
+
+            # INPUT IS 1 - 9
             if int(x) > 0:
-                #focused_widget.insert(0, x)
-                #somehow its returning none to no longer validate
-                #focused_widget.icursor(0)
-                focused_widget.delete(0, END)
+
+                # CLEAR ENTRY - SET TEXT COLOR
+                focus_w.delete(0, END)
                 if self.setting:
-                    focused_widget.config(font=("Tahoma bold", 28), fg="black")
+                    focus_w.config(font=("Tahoma bold", 28), fg="black")
                 else:
-                    focused_widget.config(font=("Chalkduster", 28), fg="green")
+                    focus_w.config(font=("Chalkduster", 28), fg="green")
+
+                # CHECK IF INPUT NOT DELETE KEY
                 if type == "1":
-                    focused_widget.insert(0, x)
+
+                    # ENTER NUMBER - ADJUST NOTE-TAKING BUTTON COLOR
+                    focus_w.insert(0, x)
                     self.color_note_buttons(x)
                 else:
+
+                    # RESET NOTE-TAKING BUTTON COLOR TO DEFAULT
                     self.color_note_buttons("")
+
+                # RECOLORIZE GRID IF IN PLAYABLE MODE
                 if self.running:
-                    self.smart_colorize(focused_widget)
-                    self.change_noting(focused_widget, False)
+                    self.smart_colorize(focus_w)
+                    self.change_noting(focus_w, False)
                     if not self.taking_notes:
-                        self.color_errors(focused_widget)
-                self.master.after_idle(lambda: focused_widget.config(validate='key'))
+                        self.color_errors(focus_w)
+
+                # ENSURE FOCUSED WIDGET IS NEWLY SELECTED
+                self.master.after_idle(lambda: focus_w.config(validate='key'))
+
         return False
 
+    # HANDLES EVENT OF USER SELECTING ENTRY BOX
     def on_click(self, event):
+
+        # DO NOTHING IF IN BETWEEN GAMES
         if not self.running:
             return
+
+        # RESET MESSAGE DISPLAY
         self.message_label.config(text="")
+
+        # ENSURE CORRECT SELECTED - CURSOR AUTO PLACED AT END
         self.master.after_idle(event.widget.icursor, END)
+
+        # UPDATE GAMEPLAY STATUS
         self.started = True
         self.just_started = False
 
+        # RECOLORIZE GRID AND BUTTONS
         self.smart_colorize(event.widget)
         self.color_errors(event.widget)
-
         self.color_note_buttons(event.widget.get())
 
+    # COLOR GRID WITH HIGHLIGHT COLOR - ROW, COLUMN, SECTION
     def smart_colorize(self, focused_w):
+
+        # DISALLOW FUNCTION AFTER JUST STARTED GAME
+        # JUST STARTED BOOLEAN ADJUSTED AFTER USER ACTION
         if self.just_started:
             return
 
-        #focused_w = self.master.focus_get()
+        # ACQUIRE LOCATION OF WIDGET WITH GRID 9X9 LIST
         all_sections = focused_w.master.master.winfo_children()[-9:]
         section_frame = focused_w.master
         section_list = section_frame.winfo_children()
         section_num = -1
         element_num = -1
 
+        # DEFAULT GRID COLORS - FIND SELECTED SECTION
         self.set_grid_color("white")
         for i, section in enumerate(all_sections):
             if section is section_frame:
                 section_num = i
 
+        # DEFAULT FRAME COLORS - FIND SELECTED ENTRY / LABEL
         section_frame.config(bg="black")
         for i, item in enumerate(section_list):
             item.config(bg=self.highlight_color)
             if item is focused_w:
                 element_num = i
 
+        # CONVERT LIST POSITION TO LOCATION ON 9X9 GRID
         entry_row = ((section_num // 3) * 3) + (element_num // 3)
         entry_col = ((section_num % 3) * 3) + (element_num % 3)
 
-        #this is a label
+        # CHECK FOR LABEL - CHANGE LABEL COLOR - RETURN
         if self.original_grid[entry_row][entry_col] != 0:
             self.set_grid_color("white")
             focused_w.config(bg=self.highlight_color)
             return
 
-        #highlight horizontal/vertical
+        # CHECK FOR ENTRY - HIGHLIGHT VERTICALLY / HORIZONTALLY
         for i, section in enumerate(all_sections):
-            #same horizontal
+
+            # SAME HORIZONTAL ROW - COLOR BOX
             if i // 3 == section_num // 3:
                 for j, item in enumerate(section.winfo_children()):
                     if j // 3 == element_num // 3:
                         item.config(bg=self.highlight_color)
-            #same vertical
+
+            # SAME VERTICAL COLUMN - COLOR BOX
             elif i % 3 == section_num % 3:
                 for j, item in enumerate(section.winfo_children()):
                     if j % 3 == element_num % 3:
                         item.config(bg=self.highlight_color)
 
+    # SEARCH FOR ERRORS AND COLOR ERRORS WITH SELECTED COLOR
     def color_errors(self, focused_w):
+
+        # ACQUIRE LIST OF ALL SECTION OBJECTS
         all_sections = focused_w.master.master.winfo_children()[-9:]
         section_frame = focused_w.master
         section_list = section_frame.winfo_children()
@@ -1468,28 +1584,32 @@ class Game:
         element_num = -1
         err_found = False
 
-        #get section num
+        # FIND PARENT SECTION OF SELECTED ENTRY
         for i, section in enumerate(all_sections):
             if section is section_frame:
                 section_num = i
 
+        # FIND POSITION SELECTED OF ENTRY IN PARENT SECTION
         for i, item in enumerate(section_list):
             if item is focused_w:
                 element_num = i
 
+        # CONVERT LIST POSITION TO LOCATION ON 9X9 GRID
         entry_row = ((section_num // 3) * 3) + (element_num // 3)
         entry_col = ((section_num % 3) * 3) + (element_num % 3)
 
+        # SAVE VALUE IN SELECTED
         try:
             entry_val = focused_w.get()
         except AttributeError:
             entry_val = str(self.original_grid[entry_row][entry_col])
 
+        # CHECK FOR NOTE-TAKING LOGIC - AFFECTS ERROR DISPLAY
         entry_noting = self.noting[entry_row][entry_col]
         if self.taking_notes and len(entry_val) > 1:
             entry_noting = True
 
-        #highlight section errors
+        # FIND ERRORS IN SECTION - HIGHLIGHT
         for i, item in enumerate(section_list):
             if item is not focused_w:
                 row = ((section_num // 3) * 3) + (i // 3)
@@ -1503,9 +1623,10 @@ class Game:
                         item.config(bg=self.error_color)
                         err_found = True
 
-        #highlight horizontal/vertical
+        # FIND ERRORS IN ROW AND COLUMN DETECTION
         for i, section in enumerate(all_sections):
-            #same horizontal
+
+            # SAME VERTICAL COLUMN - SEARCH FOR DUPLICATE VALUES
             if i // 3 == section_num // 3:
                 for j, item in enumerate(section.winfo_children()):
                     if j // 3 == element_num // 3:
@@ -1520,7 +1641,8 @@ class Game:
                                 if item is not focused_w:
                                     item.config(bg=self.error_color)
                                     err_found = True
-            #same horizontal
+
+            # SAME HORIZONTAL ROW - SEARCH FOR DUPLICATE VALUES
             elif i % 3 == section_num % 3:
                 for j, item in enumerate(section.winfo_children()):
                     if j % 3 == element_num % 3:
@@ -1536,54 +1658,72 @@ class Game:
                                     item.config(bg=self.error_color)
                                     err_found = True
 
-        #set focused if need be
+        # SET SELECTED_CELL COLOR AS ERROR
         if err_found:
             focused_w.config(bg=self.error_color)
 
+    # SET ENTIRE GRID TO INPUT COLOR
     def set_grid_color(self, color):
+
+        # ACQUIRE GRID OBJECT
         core_grid = self.master.winfo_children()[3]
+
+        # COLOR EVERY BOX (ENTRY / LABEL) IN GRID
         for section in core_grid.winfo_children():
             for box in section.winfo_children():
                 box.config(bg=color)
 
+    # SET COLOR OF NOTE-TAKING BUTTONS
     def color_note_buttons(self, contents):
+
+        # COLOR EACH 1-9 BUTTON AS USED / UNUSED BY WHICH NOTES PRESENT
         for i in range(10):
             if str(contents).find(str(i)) == -1:
                 self.note_buttons[int(i)-1].config(fg="purple")
             else:
                 self.note_buttons[int(i)-1].config(fg="gray")
 
+    # ADJUST NOTE-TAKING RECORDS FOR SELECTED ENTRY
     def change_noting(self, focused_w, noting):
+
+        # ACQUIRE SECTION OBJECTS
         all_sections = focused_w.master.master.winfo_children()[-9:]
         section_frame = focused_w.master
         section_list = section_frame.winfo_children()
         section_num = -1
         element_num = -1
 
+        # FIND SELECTED ENTRY POSITION IN LIST OF SECTIONS
         for i, section in enumerate(all_sections):
             if section is section_frame:
                 section_num = i
 
+        # FIND SELECTED ENTRY POSITION WITHIN PARENT SECTION
         for i, item in enumerate(section_list):
             if item is focused_w:
                 element_num = i
 
+        # CONVERT LIST POSITION TO LOCATION ON 9X9 GRID
         row = ((section_num // 3) * 3) + (element_num // 3)
         col = ((section_num % 3) * 3) + (element_num % 3)
+
+        # ADJUST NOTING RECORDS FOR CORRECT GRID POSITION
         self.noting[row][col] = noting
 
-        #print(self.noting)
 
+# WHEN LAUNCHING 'mySudokuApp.py' DIRECTLY
+if __name__ == "__main__":
 
-root = Tk()
-root.title("DR Sudoku")
-root.geometry("600x700+400+100")
-root.minsize(500, 700)
-root.maxsize(800,900)
+    # CREATE GAME DETAILS
+    root = Tk()
+    root.title("DR Sudoku")
+    root.geometry("600x700+400+100")
+    root.minsize(500, 700)
+    root.maxsize(800,900)
 
-root.lift()
-'''root.attributes('-topmost',True)
-root.after_idle(root.attributes,'-topmost',False)'''
+    # ELEVATE GAME APP TO FRONT
+    root.lift()
 
-game = Game(root)
-root.mainloop()
+    # CREATE AND LAUNCH GAME
+    game = Game(root)
+    root.mainloop()
